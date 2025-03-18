@@ -1,50 +1,90 @@
 package main
 
 import (
-	"log"
-	"net/http"
+    "encoding/json"
+    "fmt"
+    "log"
+    "net/http"
+    "sync"
 
-	"github.com/gorilla/websocket"
+    "github.com/gorilla/websocket"
 )
 
 var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	// Allow all connections by bypassing the origin check
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
+    CheckOrigin: func(r *http.Request) bool {
+        return true // Allow all connections (for simplicity)
+    },
+}
+type MatchEvent struct {
+    Type       string `json:"type"`
+    Scorer     string `json:"scorer"`
+    Time       string `json:"time"`
+    Score      string `json:"score"`
+    Message    string `json:"message"`
 }
 
-func main() {
-	log.Println("Starting server on port 8080...")
-	http.HandleFunc("/ws", handleWebSocket)
-	log.Fatal(http.ListenAndServe(":8080", nil))
+var clients = make(map[*websocket.Conn]bool)
+var mutex = &sync.Mutex{}
+
+func broadcast(event MatchEvent) {
+    message, err := json.Marshal(event)
+    if err != nil {
+        log.Printf("Error marshalling event: %v", err)
+        return
+    }
+
+    mutex.Lock()
+    defer mutex.Unlock()
+
+    for client := range clients {
+        err := client.WriteMessage(websocket.TextMessage, message)
+        if err != nil {
+            log.Printf("Error broadcasting to client: %v", err)
+            client.Close()
+            delete(clients, client)
+        }
+    }
 }
 
 func handleWebSocket(w http.ResponseWriter, r *http.Request) {
-	log.Println("Incoming WebSocket connection...")
-	c, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Println("Error upgrading connection:", err)
-		return
-	}
-	defer c.Close()
-	log.Println("WebSocket connection established.")
+    conn, err := upgrader.Upgrade(w, r, nil)
+    if err != nil {
+        log.Printf("WebSocket upgrade error: %v", err)
+        return
+    }
+    defer conn.Close()
 
-	// Start reading messages
-	for {
-		messageType, message, err := c.ReadMessage()
-		if err != nil {
-			log.Println("Error reading message:", err)
-			break
-		}
-		log.Printf("Received message: %s", message)
+    mutex.Lock()
+    clients[conn] = true
+    mutex.Unlock()
 
-		// Echo the message back
-		if err := c.WriteMessage(messageType, message); err != nil {
-			log.Println("Error writing message:", err)
-			break
-		}
-	}
+    for {
+        _, _, err := conn.ReadMessage()
+        if err != nil {
+            log.Printf("Error reading WebSocket message: %v", err)
+            break
+        }
+    }
+}
+
+func handleMatchEvent(w http.ResponseWriter, r *http.Request) {
+    var event MatchEvent
+    err := json.NewDecoder(r.Body).Decode(&event)
+    if err != nil {
+        http.Error(w, "Invalid request body", http.StatusBadRequest)
+        return
+    }
+
+    broadcast(event)
+
+    w.WriteHeader(http.StatusOK)
+    fmt.Fprintf(w, "Event received: %+v", event)
+}
+
+func main() {
+    http.HandleFunc("/ws", handleWebSocket)
+    http.HandleFunc("/event", handleMatchEvent)
+    port := ":8080"
+    fmt.Printf("Server started on port %s\n", port)
+    log.Fatal(http.ListenAndServe(port, nil))
 }
