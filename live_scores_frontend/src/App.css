@@ -1,0 +1,62 @@
+.app-container {
+  font-family: Arial, sans-serif;
+  padding: 20px;
+}
+
+.app-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.connection-status {
+  font-size: 0.9rem;
+  color: gray;
+}
+
+.games-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.game-card {
+  border: 1px solid #ccc;
+  padding: 15px;
+  border-radius: 8px;
+  background: #f9f9f9;
+}
+
+.game-card.active {
+  border-color: green;
+}
+
+.live-indicator {
+  color: red;
+  margin-left: 10px;
+  font-weight: bold;
+}
+
+.team-scores {
+  display: flex;
+  justify-content: space-between;
+  font-size: 1.2rem;
+  margin-bottom: 8px;
+}
+
+.team-name {
+  font-weight: bold;
+}
+
+.separator {
+  margin: 0 10px;
+}
+
+.scorers-section {
+  margin-top: 10px;
+}
+
+.app-footer {
+  margin-top: 50px;
+  text-align: center;
+  color: #888;
+}
